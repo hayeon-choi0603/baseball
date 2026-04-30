@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>야구선수 빌기 - 세 가지 모드</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -14,6 +16,8 @@
     user-select: none;
     transition: background 0.5s ease;
     touch-action: none; /* 터치 스크롤 방지 */
+    -webkit-touch-callout: none; /* iOS 터치 메뉴 방지 */
+    -webkit-user-select: none; /* iOS 텍스트 선택 방지 */
   }
 
   /* 모바일에서는 손 커서 숨기기 */
@@ -21,6 +25,27 @@
     html, body { cursor: default; }
     .hand { display: none; }
     .mode-btn, .reset-btn { cursor: pointer; }
+    
+    /* 모바일에서 엉덩이 더 크게 */
+    .player-wrap {
+      width: 420px !important;
+      height: 630px !important;
+    }
+    
+    /* 모바일에서 UI 요소들 더 크게 */
+    .count { font-size: 36px !important; }
+    .stat { font-size: 28px !important; }
+    .label { font-size: 14px !important; }
+    .title h1 { font-size: 42px !important; }
+    .title p { font-size: 16px !important; }
+    .mode-btn { 
+      padding: 12px 20px !important; 
+      font-size: 15px !important; 
+    }
+    .reset-btn { 
+      padding: 14px 28px !important; 
+      font-size: 16px !important; 
+    }
   }
 
   /* 모드별 배경 */
@@ -580,11 +605,58 @@
     hand.style.top = mouseY + 'px';
   }, { passive: false });
 
+  // 더블 탭 줌 방지
+  let lastTouchEnd = 0;
+  document.addEventListener('touchstart', (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 500) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+  
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 500) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, false);
+
   // 오디오
   let audioCtx;
+  async function initAudio() {
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+    } catch(e) {
+      console.log('Audio init failed:', e);
+    }
+  }
+  
   function playSound(type) {
     try {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioCtx) return;
+      
+      // suspended 상태면 resume 시도
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().then(() => {
+          playSoundInternal(type);
+        });
+        return;
+      }
+      
+      playSoundInternal(type);
+    } catch(e) {
+      console.log('Audio play failed:', e);
+    }
+  }
+  
+  function playSoundInternal(type) {
+    try {
       const ctx = audioCtx;
       
       if (type === 'pat') {
@@ -652,7 +724,9 @@
         osc.connect(oGain); oGain.connect(ctx.destination);
         osc.start(); osc.stop(ctx.currentTime + 0.2);
       }
-    } catch(e) {}
+    } catch(e) {
+      console.log('Audio internal failed:', e);
+    }
   }
 
   // 효과 생성
@@ -778,6 +852,7 @@
   hitbox.addEventListener('click', handleClick);
   hitbox.addEventListener('touchend', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     handleClick(e.changedTouches[0]);
   });
 
@@ -801,6 +876,8 @@
   document.addEventListener('touchend', (e) => {
     const target = e.changedTouches[0].target;
     if (target === hitbox || target === resetBtn || target.classList.contains('mode-btn')) return;
+    
+    e.preventDefault();
     
     const config = modeConfig[currentMode];
     hand.classList.remove('pat', 'slap', 'smack');
@@ -828,15 +905,11 @@
 
   // 첫 클릭/터치 시 오디오 활성화
   document.addEventListener('mousedown', () => {
-    if (!audioCtx) {
-      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
-    }
+    initAudio();
   }, { once: true });
 
   document.addEventListener('touchstart', () => {
-    if (!audioCtx) {
-      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
-    }
+    initAudio();
   }, { once: true, passive: false });
 
   // 배경浮动 이모지
