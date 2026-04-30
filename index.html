@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>야구선수 빌기 - 세 가지 모드</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -12,6 +13,14 @@
     cursor: none;
     user-select: none;
     transition: background 0.5s ease;
+    touch-action: none; /* 터치 스크롤 방지 */
+  }
+
+  /* 모바일에서는 손 커서 숨기기 */
+  @media (max-width: 768px) {
+    html, body { cursor: default; }
+    .hand { display: none; }
+    .mode-btn, .reset-btn { cursor: pointer; }
   }
 
   /* 모드별 배경 */
@@ -552,6 +561,25 @@
     hand.style.top = mouseY + 'px';
   });
 
+  // 터치 이동 (모바일)
+  document.addEventListener('touchmove', (e) => {
+    e.preventDefault(); // 스크롤 방지
+    const touch = e.touches[0];
+    mouseX = touch.clientX;
+    mouseY = touch.clientY;
+    hand.style.left = mouseX + 'px';
+    hand.style.top = mouseY + 'px';
+  }, { passive: false });
+
+  // 터치 시작 (모바일)
+  document.addEventListener('touchstart', (e) => {
+    const touch = e.touches[0];
+    mouseX = touch.clientX;
+    mouseY = touch.clientY;
+    hand.style.left = mouseX + 'px';
+    hand.style.top = mouseY + 'px';
+  }, { passive: false });
+
   // 오디오
   let audioCtx;
   function playSound(type) {
@@ -680,6 +708,10 @@
 
   // 클릭 핸들러
   function handleClick(e) {
+    // 터치 이벤트와 마우스 이벤트 모두 처리
+    const clientX = e.clientX || (e.changedTouches && e.changedTouches[0].clientX);
+    const clientY = e.clientY || (e.changedTouches && e.changedTouches[0].clientY);
+    
     const config = modeConfig[currentMode];
     
     // 손 애니메이션
@@ -701,7 +733,7 @@
     // 빨간 자국 표시
     const rect = hitbox.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
-    const target = e.clientX < centerX ? markLeft : markRight;
+    const target = clientX < centerX ? markLeft : markRight;
     target.classList.add('show');
     
     // 카운트 업데이트
@@ -739,15 +771,36 @@
     
     // 소리 및 효과
     playSound(config.audioType);
-    spawnEffects(e.clientX, e.clientY);
+    spawnEffects(clientX, clientY);
   }
 
-  // 엉덩이 영역 클릭
+  // 엉덩이 영역 클릭/터치
   hitbox.addEventListener('click', handleClick);
+  hitbox.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    handleClick(e.changedTouches[0]);
+  });
 
-  // 영역 밖 클릭 (헛스윙)
+  // 영역 밖 클릭/터치 (헛스윙)
   document.addEventListener('click', (e) => {
     if (e.target === hitbox || e.target === resetBtn || e.target.classList.contains('mode-btn')) return;
+    
+    const config = modeConfig[currentMode];
+    hand.classList.remove('pat', 'slap', 'smack');
+    void hand.offsetWidth;
+    hand.classList.add(config.handAnimation);
+    
+    if (currentMode === 'spank') {
+      combo = 0;
+      statEl.textContent = 'x0';
+      statEl.style.color = '#e67e22';
+    }
+  });
+
+  // 모바일 터치 헛스윙
+  document.addEventListener('touchend', (e) => {
+    const target = e.changedTouches[0].target;
+    if (target === hitbox || target === resetBtn || target.classList.contains('mode-btn')) return;
     
     const config = modeConfig[currentMode];
     hand.classList.remove('pat', 'slap', 'smack');
@@ -773,12 +826,18 @@
     markRight.classList.remove('show');
   });
 
-  // 첫 클릭 시 오디오 활성화
+  // 첫 클릭/터치 시 오디오 활성화
   document.addEventListener('mousedown', () => {
     if (!audioCtx) {
       try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
     }
   }, { once: true });
+
+  document.addEventListener('touchstart', () => {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    }
+  }, { once: true, passive: false });
 
   // 배경浮动 이모지
   function spawnBgFloat() {
